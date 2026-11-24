@@ -118,6 +118,7 @@ class Api:
         self.engine = MatrixMixerEngine(sample_rate=48000, blocksize=512)
         self._lock = threading.RLock()
         self._window = None
+        self._window_hidden: bool = False
         self._on_hide_cb: Optional[Callable[[], None]] = None
         self._on_exit_cb: Optional[Callable[[], None]] = None
 
@@ -181,7 +182,7 @@ class Api:
         while not self._meter_stop.is_set():
             t0 = time.perf_counter()
             win = self._window
-            if win is not None:
+            if win is not None and not self._window_hidden:
                 try:
                     eng = self.engine
                     buses_db = [round(linear_to_db(ch.peak_linear, -60.0), 2) for ch in eng.channels]
@@ -934,12 +935,17 @@ class Api:
             logger.exception("set_autostart error: %s", exc)
             return {"ok": False, "error": f"Gagal mengubah Auto-Start Windows: {exc}"}
 
+    def set_window_hidden(self, hidden: bool) -> None:
+        self._window_hidden = bool(hidden)
+
     def hide_to_tray(self) -> Dict[str, Any]:
         try:
-            if self._on_hide_cb is not None:
-                self._on_hide_cb()
+            self._window_hidden = True
+            cb = self._on_hide_cb
+            if cb is not None:
+                threading.Timer(0.03, cb).start()
             elif self._window is not None:
-                self._window.hide()
+                threading.Timer(0.03, self._window.hide).start()
             return {"ok": True}
         except Exception as exc:
             logger.exception("hide_to_tray error: %s", exc)
@@ -947,10 +953,12 @@ class Api:
 
     def full_close(self) -> Dict[str, Any]:
         try:
-            if self._on_exit_cb is not None:
-                threading.Thread(target=self._on_exit_cb, daemon=True).start()
+            self._window_hidden = True
+            cb = self._on_exit_cb
+            if cb is not None:
+                threading.Timer(0.03, cb).start()
             elif self._window is not None:
-                self._window.destroy()
+                threading.Timer(0.03, self._window.destroy).start()
             return {"ok": True}
         except Exception as exc:
             logger.exception("full_close error: %s", exc)

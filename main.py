@@ -33,8 +33,10 @@ def create_tray_image() -> Image.Image:
 
 def main() -> int:
     smoke_test = "--smoke-test" in sys.argv
+    test_tray = "--test-tray" in sys.argv
     start_minimized = "--minimized" in sys.argv
     api = Api()
+    api.set_window_hidden(start_minimized)
     w, h = api.window_size
     html_path = get_resource_path(r"ui\index.html")
 
@@ -56,6 +58,7 @@ def main() -> int:
 
     def show_window() -> None:
         try:
+            api.set_window_hidden(False)
             window.show()
             window.restore()
         except Exception as exc:
@@ -63,12 +66,14 @@ def main() -> int:
 
     def hide_to_tray() -> None:
         try:
+            api.set_window_hidden(True)
             window.hide()
         except Exception as exc:
             logger.warning("hide_to_tray warning: %s", exc)
 
     def full_close() -> None:
         force_exit[0] = True
+        api.set_window_hidden(True)
         icon = tray_icon_ref[0]
         if icon is not None:
             try:
@@ -121,20 +126,32 @@ def main() -> int:
                 full_close()
 
             threading.Thread(target=_auto_close, daemon=True).start()
+        elif test_tray:
+            def _test_tray_flow() -> None:
+                time.sleep(1.0)
+                api.hide_to_tray()
+                time.sleep(0.8)
+                show_window()
+                time.sleep(0.6)
+                api.full_close()
+
+            threading.Thread(target=_test_tray_flow, daemon=True).start()
 
     def on_resized(width: int, height: int) -> None:
         api.set_window_size(width, height)
 
     def on_closing():
-        if force_exit[0] or smoke_test:
+        if force_exit[0] or smoke_test or test_tray:
             api.shutdown()
             return True
-        # Intercept X click: show Hide-to-Tray vs Full-Close dialog inside UI
-        try:
-            window.evaluate_js("window.__showCloseDialog && window.__showCloseDialog()")
-        except Exception:
-            full_close()
-            return True
+        # Intercept X click asynchronously so WinForms FormClosing never deadlocks WebView2
+        def _ask_js() -> None:
+            try:
+                window.evaluate_js("window.__showCloseDialog && window.__showCloseDialog()")
+            except Exception:
+                full_close()
+
+        threading.Thread(target=_ask_js, daemon=True).start()
         return False
 
     window.events.loaded += on_loaded
