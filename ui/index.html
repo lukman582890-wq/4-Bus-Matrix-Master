@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4-Bus Matrix Master</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 28 28" width="26" height="26">
+            <rect x="2" y="2" width="24" height="24" rx="6" fill="#121720" stroke="#2c3545" stroke-width="1.5"/>
+            <rect x="6" y="13" width="3" height="9" rx="1.2" fill="#38d6e8"/>
+            <rect x="11" y="8" width="3" height="14" rx="1.2" fill="#38d6e8"/>
+            <rect x="16" y="11" width="3" height="11" rx="1.2" fill="#ffb020"/>
+            <rect x="21" y="6" width="3" height="16" rx="1.2" fill="#3ddc97"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">4-Bus Matrix Master</div>
+          <div id="subtitle" class="brand-sub">Initializing WASAPI engine...</div>
+        </div>
+      </div>
+
+      <div class="topbar-controls">
+        <div class="ctrl-group">
+          <label class="ctrl-label" for="selPrimaryOut">Main Out</label>
+          <select id="selPrimaryOut" class="ui-select select-primary" title="Primary Monitor Output (Main 1/2)"></select>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="ctrl-label" for="selPreset">Preset</label>
+          <div class="preset-wrap">
+            <select id="selPreset" class="ui-select select-preset"></select>
+            <button id="btnSavePreset" class="btn btn-icon" title="Simpan Preset Custom">+</button>
+            <button id="btnDelPreset" class="btn btn-icon" title="Hapus Preset Custom" disabled>×</button>
+          </div>
+        </div>
+
+        <div class="link-group">
+          <button id="btnLink12" class="btn btn-toggle active-cyan" aria-pressed="true" title="Link OUT 1 & OUT 2">Link 1/2</button>
+          <button id="btnLink34" class="btn btn-toggle active-amber" aria-pressed="true" title="Link OUT 3 & OUT 4">Link 3/4</button>
+          <button id="btnAutoStart" class="btn btn-toggle" aria-pressed="false" title="Otomatis jalan saat Windows menyala (minimized ke Tray)">Auto-Start</button>
+        </div>
+
+        <button id="btnRec" class="btn btn-rec" title="Record Master Mix to WAV">● REC WAV</button>
+        <button id="btnPower" class="btn btn-power running" title="Start / Stop Audio Engine">STOP MIXER</button>
+        <button id="btnRefresh" class="btn btn-icon" title="Refresh WASAPI Devices">↻</button>
+      </div>
+    </header>
+
+    <!-- Error Banner -->
+    <div id="errorBanner" class="error-banner hidden" role="alert">
+      <span id="errorText"></span>
+      <button id="btnErrorRefresh" class="btn btn-xs">Refresh Devices</button>
+    </div>
+
+    <!-- Main Mixer Deck: 4 Bus Strips + MAIN OUT Panel -->
+    <main class="mixer-deck">
+      <section id="busGrid" class="bus-grid" aria-label="4 Output Bus Strips"></section>
+
+      <!-- MAIN OUT Control Room Panel (380px) -->
+      <aside class="main-panel" aria-label="Main Out Control Room">
+        <div class="main-head">
+          <div class="main-head-left">
+            <span class="mono badge-main">MAIN OUT</span>
+            <span id="signalBadge" class="signal-badge ok">SIGNAL OK</span>
+          </div>
+          <label class="switch-wrap" title="Soft Limiter (-0.3 dBFS)">
+            <input id="chkLimiter" type="checkbox" checked />
+            <span class="switch-slider"></span>
+            <span class="switch-lbl">Soft Limiter</span>
+          </label>
+        </div>
+
+        <!-- Loudness Readout Block -->
+        <div class="lufs-hero">
+          <div class="lufs-int-col">
+            <div class="lufs-caption">INTEGRATED</div>
+            <div class="lufs-big-row">
+              <span id="valLufsInt" class="lufs-big mono">-70.0</span>
+              <span class="lufs-unit mono">LUFS</span>
+            </div>
+          </div>
+          <div class="lufs-side-col">
+            <div class="lufs-mini">
+              <span>SHORT-TERM</span>
+              <strong id="valLufsSt" class="mono">-70.0 LUFS</strong>
+            </div>
+            <div class="lufs-mini">
+              <span>TRUE PEAK</span>
+              <strong id="valPeakDb" class="mono">-60.0 dBFS</strong>
+            </div>
+            <button id="btnResetLufs" class="btn btn-xs btn-reset-lufs" type="button">Reset LUFS</button>
+          </div>
+        </div>
+
+        <!-- 60-Second Loudness History Graph -->
+        <div class="lufs-graph-wrap">
+          <canvas id="lufsGraph" class="lufs-graph" width="348" height="84" aria-label="60 second loudness history"></canvas>
+        </div>
+
+        <!-- Master Fader + Dual Stereo Meter L/R -->
+        <div class="master-fader-area">
+          <div id="masterScale" class="fader-scale master-scale"></div>
+          <div id="masterFaderTrack" class="fader-track master-fader-track" tabindex="0" role="slider" aria-label="Master Gain" aria-valuemin="-60" aria-valuemax="12" title="Drag / Shift+Drag Fine / Scroll 0.1dB / Dbl-Click, Right-Click, Ctrl+Click = 0 dB">
+            <div class="fader-rail"></div>
+            <div id="masterZeroLine" class="fader-zero-line"></div>
+            <div id="masterFaderCap" class="fader-cap"></div>
+          </div>
+          <div class="stereo-meters">
+            <div class="sm-col">
+              <canvas id="meterMasterL" class="meter-canvas meter-tall" width="16" height="220"></canvas>
+              <span class="sm-lbl mono">L</span>
+            </div>
+            <div class="sm-col">
+              <canvas id="meterMasterR" class="meter-canvas meter-tall" width="16" height="220"></canvas>
+              <span class="sm-lbl mono">R</span>
+            </div>
+          </div>
+        </div>
+
+        <button id="masterDbPill" class="db-pill master-db-pill" type="button" title="Double-click / Klik kanan untuk reset 0.0 dB">+0.0 dB</button>
+
+        <!-- Control Room Buttons: MONO / DIM / MASTER MUTE -->
+        <div class="cr-controls">
+          <div class="cr-row-2">
+            <button id="btnMono" class="btn cr-btn" type="button" aria-pressed="false" title="Mono Sum Phase Check">MONO</button>
+            <button id="btnDim" class="btn cr-btn" type="button" aria-pressed="false" title="Attenuate Monitor -15 dB">DIM -15 dB</button>
+          </div>
+          <button id="btnMasterMute" class="btn cr-btn cr-mute" type="button" aria-pressed="false" title="Mute All Outputs">MASTER MUTE</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Routing Popover (Shared, positioned dynamically) -->
+  <div id="routingPopover" class="popover hidden" role="dialog" aria-label="Bus Routing Settings">
+    <div class="popover-header">
+      <span id="popTitle" class="mono">OUT 1 Routing</span>
+      <button id="popClose" class="btn-close" aria-label="Close">×</button>
+    </div>
+    <div class="popover-body">
+      <div class="pop-field">
+        <label for="popSendTo">Send To (Output Soundcard)</label>
+        <select id="popSendTo" class="ui-select"></select>
+      </div>
+
+      <div class="pop-field">
+        <label for="popSourceMode">Input Source</label>
+        <select id="popSourceMode" class="ui-select"></select>
+      </div>
+
+      <div id="popSoundcardBox" class="pop-sub">
+        <div class="pop-field">
+          <label for="popCapDev">Capture Device (Loopback / Input)</label>
+          <select id="popCapDev" class="ui-select"></select>
+        </div>
+        <div class="pop-field">
+          <label for="popTapMode">Channel Tap</label>
+          <select id="popTapMode" class="ui-select"></select>
+        </div>
+      </div>
+
+      <div id="popFileBox" class="pop-sub hidden">
+        <div class="pop-field">
+          <label>Audio File (WAV / FLAC / OGG)</label>
+          <div class="file-row">
+            <button id="popLoadFile" class="btn btn-sm">Load Audio File...</button>
+            <span id="popFileName" class="file-name mono">No file loaded</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="popToneBox" class="pop-sub hidden">
+        <div class="pop-field">
+          <label for="popToneType">Test Tone Generator</label>
+          <select id="popToneType" class="ui-select"></select>
+        </div>
+      </div>
+
+      <div class="pop-field">
+        <label for="popFilterMode">Crossover / Mode</label>
+        <select id="popFilterMode" class="ui-select"></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Close Confirmation Modal (Hide to Tray vs Full Close) -->
+  <div id="closeModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="closeModalTitle">
+    <div class="modal-card">
+      <div class="modal-title" id="closeModalTitle">Tutup 4-Bus Matrix Master?</div>
+      <p class="modal-desc">
+        Pilih <strong>Hide to Tray</strong> agar audio mixer tetap aktif di background (System Tray),
+        atau <strong>Full Close</strong> untuk mematikan audio dan menutup aplikasi sepenuhnya.
+      </p>
+      <div class="modal-actions">
+        <button id="btnModalHide" class="btn btn-modal-tray" type="button">Hide to Tray</button>
+        <button id="btnModalExit" class="btn btn-modal-exit" type="button">Full Close</button>
+        <button id="btnModalCancel" class="btn" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

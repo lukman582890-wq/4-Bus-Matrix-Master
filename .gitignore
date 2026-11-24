@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller build artifacts (EXE distributed via GitHub Releases)
+build/
+dist/
+*.spec
+
+# Runtime local files
+app.log
+settings.json
+mixer_config.json
+
+# Virtual audio driver build outputs
+virtual_audio_driver/build_x64/
+
+# Unrelated / local workspace files
+Spotiluks/
+AGENTS.md
